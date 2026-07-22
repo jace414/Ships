@@ -15,7 +15,7 @@ type JourneyLog = {
 type PortType = {
 	home: boolean;
 	name: string;
-	coordinates: GeoJSON;
+	location: GeoJSON;
 };
 
 interface ShipConfig {
@@ -51,8 +51,8 @@ class Ship {
 		this.maxSpeedNauts = newSpeed;
 	}
 	private calcTravelDistance(destinationPort: PortType): number {
-		console.log('currentLocation: ', this.currentPort.coordinates);
-		console.log('destination: ', destinationPort.coordinates);
+		console.log('currentLocation: ', this.currentPort.location.coordinates);
+		console.log('destination: ', destinationPort.location.coordinates);
 		return 0;
 
 		// calculate the distance in nautical miles between two cooridinate points
@@ -70,10 +70,7 @@ class Ship {
 	): JourneyLog {
 		const log = {
 			date: new Date().toISOString(),
-			message: `${this.classification}, ${this.name},
-            travelled ${travelDistanceNauts} nautical miles
-            from ${this.currentPort.name} to ${destinationPort.name}
-            in ${travelTimeHrs}`,
+			message: `${this.classification}, ${this.name}, travelled ${travelDistanceNauts} nautical miles from ${this.currentPort.name} to ${destinationPort.name}in ${travelTimeHrs} hours.`,
 		};
 		this.logs.push(log);
 		return log;
@@ -85,7 +82,7 @@ const ports: Record<string, PortType> = {
 	manila: {
 		home: true,
 		name: 'Port of Manila',
-		coordinates: {
+		location: {
 			type: 'Point',
 			coordinates: [120.9647, 14.585], //14.585171957235625, 120.96478225506924
 		},
@@ -93,7 +90,7 @@ const ports: Record<string, PortType> = {
 	cebu: {
 		home: false,
 		name: 'Port of Cebu',
-		coordinates: {
+		location: {
 			type: 'Point',
 			coordinates: [123.911, 10.297],
 		},
@@ -102,7 +99,7 @@ const ports: Record<string, PortType> = {
 	davao: {
 		home: false,
 		name: 'Port of Davao',
-		coordinates: {
+		location: {
 			type: 'Point',
 			coordinates: [125.664, 7.129],
 		},
@@ -111,7 +108,7 @@ const ports: Record<string, PortType> = {
 	iloIlo: {
 		home: false,
 		name: 'Port of Ilo Ilo',
-		coordinates: {
+		location: {
 			type: 'Point',
 			coordinates: [122.595, 10.707],
 		},
@@ -120,7 +117,7 @@ const ports: Record<string, PortType> = {
 	generalSantos: {
 		home: false,
 		name: 'Port of General Santos',
-		coordinates: {
+		location: {
 			type: 'Point',
 			coordinates: [125.16, 6.095],
 		},
@@ -133,7 +130,7 @@ const ship = new Ship({
 	homePort: {
 		home: true,
 		name: 'Port of Manila',
-		coordinates: {
+		location: {
 			type: 'Point',
 			coordinates: [120.9647, 14.585], //14.585171957235625, 120.96478225506924
 		},
@@ -144,8 +141,10 @@ const ship = new Ship({
 ship.travel({
 	home: false,
 	name: 'Port of General Santos',
-	coordinates: {
+	location: {
 		type: 'Point',
 		coordinates: [125.16, 6.095],
 	},
 });
+
+console.log(ports.manila);
