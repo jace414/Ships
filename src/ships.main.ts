@@ -78,51 +78,51 @@ class Ship {
 }
 
 // implementation
-const ports: Record<string, PortType> = {
-	manila: {
+const ports = new Map<string, PortType>([
+	['manila', {
 		home: true,
 		name: 'Port of Manila',
 		location: {
 			type: 'Point',
 			coordinates: [120.9647, 14.585], //14.585171957235625, 120.96478225506924
 		},
-	},
-	cebu: {
+	}],
+	['cebu', {
 		home: false,
 		name: 'Port of Cebu',
 		location: {
 			type: 'Point',
 			coordinates: [123.911, 10.297],
 		},
-	}, // 10.297441901095748, 123.91095305903276 //
+	}], // 10.297441901095748, 123.91095305903276 //
 
-	davao: {
+	['davao', {
 		home: false,
 		name: 'Port of Davao',
 		location: {
 			type: 'Point',
 			coordinates: [125.664, 7.129],
 		},
-	}, //7.128833062154214, 125.6635716777722
+	}], //7.128833062154214, 125.6635716777722
 
-	iloIlo: {
+	['iloIlo', {
 		home: false,
 		name: 'Port of Ilo Ilo',
 		location: {
 			type: 'Point',
 			coordinates: [122.595, 10.707],
 		},
-	}, //10.706570594883743, 122.59450934838944
+	}], //10.706570594883743, 122.59450934838944
 
-	generalSantos: {
+	['generalSantos', {
 		home: false,
 		name: 'Port of General Santos',
 		location: {
 			type: 'Point',
 			coordinates: [125.16, 6.095],
 		},
-	},
-}; //6.0945740549402645, 125.16039924741254
+	}],
+]);
 
 const ship = new Ship({
 	name: 'Carribean',
@@ -147,4 +147,4 @@ ship.travel({
 	},
 });
 
-console.log(ports.manila);
+console.log(ports.get('manila'));
