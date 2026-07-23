@@ -1,28 +1,73 @@
 import { z } from 'zod';
+import chalk from 'chalk';
 
-type ShipClassification = 'Cruise Ship' | 'Cargo Ship' | 'Tanker Ship' | 'Pirate Ship' | 'Yacht';
+type ShipClass = 'Cruise Ship' | 'Cargo Ship' | 'Tanker Ship' | 'Pirate Ship' | 'Yacht';
 
-type GeoJSON = {
-	type: 'Point';
-	coordinates: [longitude: number, latitude: number];
-};
-
-type JourneyLog = {
+type JourneyLogEntry = {
 	date: string;
 	message: string;
 };
 
-type PortType = {
-	home: boolean;
-	name: string;
-	location: GeoJSON;
-};
+const portIdSchema = z.uuid();
+
+const portSchema = z.object({
+	type: z.literal('Feature'),
+	id: portIdSchema,
+	geometry: z.object({
+		type: z.literal('Point'),
+		coordinates: z.tuple([
+			z.number().min(-180).max(180),
+			z.number().min(-90).max(90),
+		]),
+	}),
+	properties: z.object({
+		name: z.string().min(1),
+		home: z.boolean(),
+	}),
+});
+
+const portsSchema = z
+	.object({
+		type: z.literal('FeatureCollection'),
+		features: z.array(portSchema).min(1),
+	})
+	.superRefine(({ features }, context) => {
+		const seenIds = new Set<string>();
+		let homePortCount = 0;
+
+		features.forEach((port, index) => {
+			if (seenIds.has(port.id)) {
+				context.addIssue({
+					code: 'custom',
+					message: `Duplicate port ID: ${port.id}`,
+					path: ['features', index, 'id'],
+				});
+			}
+
+			seenIds.add(port.id);
+
+			if (port.properties.home) {
+				homePortCount += 1;
+			}
+		});
+
+		if (homePortCount !== 1) {
+			context.addIssue({
+				code: 'custom',
+				message: 'A FeatureCollection must contain exactly one home port',
+				path: ['features'],
+			});
+		}
+	});
+
+type Port = z.infer<typeof portSchema>;
+type Ports = z.infer<typeof portsSchema>;
 
 interface ShipConfig {
 	name: string;
-	classification: ShipClassification;
-	homePort: PortType;
-	maxSpeedNauts: number;
+	classification: ShipClass;
+	homePort: Port;
+	maxSpeedKnots: number;
 }
 class Ship {
 	constructor(config: ShipConfig) {
@@ -30,121 +75,141 @@ class Ship {
 		this.classification = config.classification;
 		this.homePort = config.homePort;
 		this.currentPort = config.homePort;
-		this.maxSpeedNauts = config.maxSpeedNauts;
+		this.maxSpeedKnots = config.maxSpeedKnots;
 	}
 	name: string;
-	classification: ShipClassification;
-	homePort: PortType;
-	currentPort: PortType;
-	maxSpeedNauts: number;
-	mileage: number = 0;
-	logs: JourneyLog[] = [];
-	travel(destinationPort: PortType): void {
-		const travelDistanceNauts = this.calcTravelDistance(destinationPort);
-		const travelTimeHrs = this.calcTravelTime(travelDistanceNauts);
-		const log = this.log(destinationPort, travelDistanceNauts, travelTimeHrs);
-		console.log(log.message);
-		this.updateMileage(travelDistanceNauts);
-		this.currentPort = destinationPort;
+	classification: ShipClass;
+	homePort: Port;
+	currentPort: Port;
+	maxSpeedKnots: number;
+	mileageNauticalMiles = 0;
+	logs: JourneyLogEntry[] = [];
+	sailTo(port: Port): void {
+		const distance = this.distanceTo(port);
+		const hours = this.travelTime(distance);
+		this.logJourney(port, distance, hours);
+		this.mileageNauticalMiles += distance;
+		if (port) {
+			this.currentPort = port;
+		}
 	}
-	setMaxSpeed(newSpeed: number): void {
-		this.maxSpeedNauts = newSpeed;
+	setMaxSpeed(speedKnots: number): void {
+		this.maxSpeedKnots = speedKnots;
 	}
-	private calcTravelDistance(destinationPort: PortType): number {
-		console.log('currentLocation: ', this.currentPort.location.coordinates);
-		console.log('destination: ', destinationPort.location.coordinates);
+	private distanceTo(port: Port): number {
+		console.log('currentLocation: ', this.currentPort.geometry.coordinates);
+		if (port) {
+			console.log('destination: ', port.geometry.coordinates);
+		}
 		return 0;
 
 		// calculate the distance in nautical miles between two cooridinate points
 	}
-	private calcTravelTime(travelDistanceNauts: number): number {
-		return travelDistanceNauts / this.maxSpeedNauts;
+	private travelTime(distance: number): number {
+		return distance / this.maxSpeedKnots;
 	}
-	private updateMileage(distance: number): void {
-		this.mileage += distance;
-	}
-	private log(
-		destinationPort: PortType,
-		travelDistanceNauts: number,
-		travelTimeHrs: number,
-	): JourneyLog {
-		const log = {
+	private logJourney(port: Port, distance: number, hours: number): void {
+		if (!port) {
+			throw new Error('logJourney: argument port is undefined');
+		}
+		const log: JourneyLogEntry = {
 			date: new Date().toISOString(),
-			message: `${this.classification}, ${this.name}, travelled ${travelDistanceNauts} nautical miles from ${this.currentPort.name} to ${destinationPort.name}in ${travelTimeHrs} hours.`,
+			message: `${this.classification}, ${chalk.whiteBright.bold.italic(this.name)}, travelled ${chalk.yellow(distance)} na. miles\nfrom ${chalk.green.bold(this.currentPort.properties.name)} -> ${chalk.red.bold(port.properties.name)} in ${chalk.yellow(hours)} hours.`,
 		};
 		this.logs.push(log);
-		return log;
+		console.log(log.message);
 	}
 }
 
 // implementation
-const ports = new Map<string, PortType>([
-	['manila', {
-		home: true,
-		name: 'Port of Manila',
-		location: {
-			type: 'Point',
-			coordinates: [120.9647, 14.585], //14.585171957235625, 120.96478225506924
-		},
-	}],
-	['cebu', {
-		home: false,
-		name: 'Port of Cebu',
-		location: {
-			type: 'Point',
-			coordinates: [123.911, 10.297],
-		},
-	}], // 10.297441901095748, 123.91095305903276 //
 
-	['davao', {
-		home: false,
-		name: 'Port of Davao',
-		location: {
-			type: 'Point',
-			coordinates: [125.664, 7.129],
+const portsApiBody: unknown = {
+	type: 'FeatureCollection',
+	features: [
+		{
+			type: 'Feature',
+			id: '0b9d6a87-6e0f-4c7b-ae3c-1a0e7c942ef1',
+			geometry: {
+				type: 'Point',
+				coordinates: [120.9647, 14.585], //14.585171957235625, 120.96478225506924
+			},
+			properties: {
+				home: true,
+				name: 'Port of Manila',
+			},
 		},
-	}], //7.128833062154214, 125.6635716777722
+		{
+			type: 'Feature',
+			id: 'a1c13d5e-9e4f-4a64-8cc6-2aa6ed32e801',
+			properties: {
+				home: false,
+				name: 'Port of Cebu',
+			},
+			geometry: {
+				type: 'Point',
+				coordinates: [123.911, 10.297],
+			},
+		},
+		{
+			type: 'Feature',
+			id: 'f4bba4b2-48d6-4c29-89b5-2ff2f307b25a',
+			properties: {
+				home: false,
+				name: 'Port of Davao',
+			},
+			geometry: {
+				type: 'Point',
+				coordinates: [125.664, 7.129],
+			},
+		},
+		{
+			type: 'Feature',
+			id: '93600beb-792c-4b83-9f9e-79d4af324203',
+			properties: {
+				home: false,
+				name: 'Port of Ilo Ilo',
+			},
+			geometry: {
+				type: 'Point',
+				coordinates: [122.595, 10.707],
+			},
+		},
+		{
+			type: 'Feature',
+			id: 'c7019532-70ea-46cb-9b07-90f66e86c6f9',
+			properties: {
+				home: false,
+				name: 'Port of General Santos',
+			},
+			geometry: {
+				type: 'Point',
+				coordinates: [125.16, 6.095],
+			},
+		},
+	],
+};
 
-	['iloIlo', {
-		home: false,
-		name: 'Port of Ilo Ilo',
-		location: {
-			type: 'Point',
-			coordinates: [122.595, 10.707],
-		},
-	}], //10.706570594883743, 122.59450934838944
+const ports = portsSchema.parse(portsApiBody);
 
-	['generalSantos', {
-		home: false,
-		name: 'Port of General Santos',
-		location: {
-			type: 'Point',
-			coordinates: [125.16, 6.095],
-		},
-	}],
-]);
+function getPortById(ports: Ports, id: unknown): Port {
+	const validatedId = portIdSchema.parse(id);
+	const port = ports.features.find(candidate => candidate.id === validatedId);
+
+	if (!port) {
+		throw new Error(`Unknown port ID: ${validatedId}`);
+	}
+
+	return port;
+}
+
+const homePort = getPortById(ports, '0b9d6a87-6e0f-4c7b-ae3c-1a0e7c942ef1');
 
 const ship = new Ship({
 	name: 'Carribean',
 	classification: 'Cruise Ship',
-	homePort: {
-		home: true,
-		name: 'Port of Manila',
-		location: {
-			type: 'Point',
-			coordinates: [120.9647, 14.585], //14.585171957235625, 120.96478225506924
-		},
-	},
-	maxSpeedNauts: 50,
+	homePort,
+	maxSpeedKnots: 50,
 });
 
-ship.travel({
-	home: false,
-	name: 'Port of General Santos',
-	location: {
-		type: 'Point',
-		coordinates: [125.16, 6.095],
-	},
-});
-
-console.log(ports.get('manila'));
+const destinationPort = getPortById(ports, 'f4bba4b2-48d6-4c29-89b5-2ff2f307b25a');
+ship.sailTo(destinationPort);
